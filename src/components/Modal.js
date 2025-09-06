@@ -1,0 +1,107 @@
+import React from 'react';
+import { 
+  Modal as RNModal, 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  TouchableWithoutFeedback,
+  ScrollView 
+} from 'react-native';
+
+const Modal = ({ 
+  visible, 
+  onClose, 
+  title, 
+  children, 
+  showCloseButton = true,
+  animationType = 'slide' 
+}) => {
+  return (
+    <RNModal
+      visible={visible}
+      transparent={true}
+      animationType={animationType}
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.modal}>
+              {title && (
+                <View style={styles.header}>
+                  <Text style={styles.title}>{title}</Text>
+                  {showCloseButton && (
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                      <Text style={styles.closeButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              <ScrollView 
+                style={styles.content} 
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.scrollContent}
+              >
+                {children}
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </RNModal>
+  );
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: '100%',
+    maxHeight: '95%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333333',
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: '#6C757D',
+    fontWeight: 'bold',
+  },
+  content: {
+    padding: 16,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+});
+
+export default Modal;
