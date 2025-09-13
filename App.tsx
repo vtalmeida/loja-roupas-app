@@ -25,7 +25,7 @@ function App() {
     <SafeAreaProvider>
       <StatusBar 
         barStyle="light-content" 
-        backgroundColor="#F2D1D3"
+        backgroundColor="#E8B4B8"
       />
       <AppNavigator />
     </SafeAreaProvider>
