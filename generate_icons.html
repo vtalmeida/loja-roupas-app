@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gerador de Ícones - Bru Moda Íntima</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .icon { margin: 10px; display: inline-block; }
+        canvas { border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Gerador de Ícones - Bru Moda Íntima</h1>
+    <p>Clique com o botão direito em cada ícone e salve como PNG:</p>
+    
+    <div class="icon">
+        <h3>48x48 (mdpi)</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+    </div>
+    
+    <div class="icon">
+        <h3>72x72 (hdpi)</h3>
+        <canvas id="icon72" width="72" height="72"></canvas>
+    </div>
+    
+    <div class="icon">
+        <h3>96x96 (xhdpi)</h3>
+        <canvas id="icon96" width="96" height="96"></canvas>
+    </div>
+    
+    <div class="icon">
+        <h3>144x144 (xxhdpi)</h3>
+        <canvas id="icon144" width="144" height="144"></canvas>
+    </div>
+    
+    <div class="icon">
+        <h3>192x192 (xxxhdpi)</h3>
+        <canvas id="icon192" width="192" height="192"></canvas>
+    </div>
+
+    <script>
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Background circle with gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#E91E63');
+            gradient.addColorStop(1, '#9C27B0');
+            
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 4, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // White border
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Text "BM"
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `bold ${size * 0.35}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('BM', size/2, size/2);
+            
+            // Decorative dots
+            const dotSize = size * 0.02;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.arc(size * 0.3, size * 0.3, dotSize, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(size * 0.7, size * 0.3, dotSize, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(size * 0.3, size * 0.7, dotSize, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(size * 0.7, size * 0.7, dotSize, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        // Generate all icons
+        createIcon('icon48', 48);
+        createIcon('icon72', 72);
+        createIcon('icon96', 96);
+        createIcon('icon144', 144);
+        createIcon('icon192', 192);
+    </script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
+import colors from '../theme/colors';
 
 // Importar as telas
 import HomeScreen from '../screens/HomeScreen';
@@ -105,12 +106,12 @@ function MainTabNavigator() {
             </Text>
           );
         },
-        tabBarActiveTintColor: '#2E86AB',
-        tabBarInactiveTintColor: '#6C757D',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: colors.backgroundSecondary,
           borderTopWidth: 1,
-          borderTopColor: '#E9ECEF',
+          borderTopColor: colors.border,
           paddingBottom: 5,
           paddingTop: 5,
           height: 60,

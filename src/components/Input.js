@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, TextInput, Text, StyleSheet } from 'react-native';
+import colors from '../theme/colors';
 
 const Input = ({ 
   label, 
@@ -30,7 +31,7 @@ const Input = ({
         secureTextEntry={secureTextEntry}
         multiline={multiline}
         numberOfLines={numberOfLines}
-        placeholderTextColor="#6C757D"
+        placeholderTextColor={colors.textMuted}
         {...props}
       />
       {error && <Text style={styles.errorText}>{error}</Text>}
@@ -45,17 +46,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#DDDDDD',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundSecondary,
+    color: colors.textPrimary,
     minHeight: 48,
   },
   multilineInput: {
@@ -63,10 +65,10 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   errorInput: {
-    borderColor: '#DC3545',
+    borderColor: colors.error,
   },
   errorText: {
-    color: '#DC3545',
+    color: colors.error,
     fontSize: 14,
     marginTop: 4,
   },

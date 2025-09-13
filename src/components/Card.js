@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import colors from '../theme/colors';
 
-const Card = ({ children, style, ...props }) => {
+const Card = ({ children, style, noMargin = false, ...props }) => {
+  const cardStyle = noMargin ? [styles.card, styles.cardNoMargin, style] : [styles.card, style];
   return (
-    <View style={[styles.card, style]} {...props}>
+    <View style={cardStyle} {...props}>
       {children}
     </View>
   );
@@ -11,16 +13,22 @@ const Card = ({ children, style, ...props }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 12,
     padding: 16,
     marginVertical: 4,
     marginHorizontal: 16,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cardNoMargin: {
+    marginVertical: 0,
+    marginHorizontal: 0,
   },
 });
 

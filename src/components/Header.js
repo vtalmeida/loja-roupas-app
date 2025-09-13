@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import colors from '../theme/colors';
 
 const Header = ({ title, onBackPress, rightComponent, showBackButton = false }) => {
   return (
@@ -30,12 +31,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#2E86AB',
+    height: 60,
+    backgroundColor: colors.accent,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   leftContainer: {
     flex: 1,
@@ -50,17 +54,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#D61A75',
   },
   backButton: {
     padding: 8,
   },
   backButtonText: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#FFFFFF',
-    fontWeight: 'bold',
+    fontWeight: '900',
   },
 });
 

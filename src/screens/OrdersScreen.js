@@ -9,15 +9,28 @@ import {
   FlatList 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Input from '../components/Input';
+import CurrencyInput from '../components/CurrencyInput';
 import InlineDropdown from '../components/InlineDropdown';
-import QuantityCounter from '../components/QuantityCounter';
+import ProductSelector from '../components/ProductSelector';
+import FilterModal from '../components/FilterModal';
+import SuccessModal from '../components/SuccessModal';
+import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
 import Database from '../database/database';
+import { formatCurrency, cleanCurrencyValue } from '../utils/formatters';
+import colors from '../theme/colors';
+
+const statusColors = {
+  with_customer: colors.info,
+  paid: colors.success,
+  order: colors.error,
+};
 
 const OrdersScreen = ({ navigation, route }) => {
   const [orders, setOrders] = useState([]);
@@ -25,36 +38,43 @@ const OrdersScreen = ({ navigation, route }) => {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
   const [formData, setFormData] = useState({
     customer_id: '',
-    product_id: '',
-    quantity: '',
     status: 'with_customer',
     notes: '',
+    paid_amount: '',
   });
-
-  const statusColors = {
-    with_customer: '#17A2B8',
-    paid: '#6F42C1',
-    order: '#DC3545',
-  };
+  const [selectedProducts, setSelectedProducts] = useState([]);
 
   const statusLabels = {
+    order: 'Encomenda',
     with_customer: 'Com Cliente',
     paid: 'Pago',
-    order: 'Encomenda',
   };
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // Recarregar dados sempre que a tela receber foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
+
   useEffect(() => {
     applyFiltersAndSort();
-  }, [orders, statusFilter, sortOrder]);
+  }, [orders, statusFilter, customerFilter, sortOrder]);
 
   useEffect(() => {
     const checkPendingAction = async () => {
@@ -96,12 +116,18 @@ const OrdersScreen = ({ navigation, route }) => {
     }
   };
 
+
   const applyFiltersAndSort = () => {
     let filtered = [...orders];
 
     // Aplicar filtro de status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(order => order.status === statusFilter);
+    }
+
+    // Aplicar filtro de cliente
+    if (customerFilter !== 'all') {
+      filtered = filtered.filter(order => order.customer_id.toString() === customerFilter);
     }
 
     // Aplicar ordenação
@@ -119,51 +145,82 @@ const OrdersScreen = ({ navigation, route }) => {
     setFilteredOrders(filtered);
   };
 
-  const handleNewOrder = () => {
+  const handleNewOrder = async () => {
+    // Recarregar dados antes de abrir o modal
+    await loadData();
+    
     setEditingOrder(null);
     setFormData({
       customer_id: '',
-      product_id: '',
-      quantity: '',
       status: 'with_customer',
       notes: '',
+      paid_amount: '',
     });
+    setSelectedProducts([]);
     setModalVisible(true);
   };
 
-  const handleEditOrder = (order) => {
+  const handleEditOrder = async (order) => {
+    // Recarregar dados antes de abrir o modal
+    await loadData();
+    
     setEditingOrder(order);
     setFormData({
       customer_id: order.customer_id.toString(),
-      product_id: order.product_id.toString(),
-      quantity: order.quantity.toString(),
       status: order.status,
       notes: order.notes || '',
+      paid_amount: (order.paid_amount || 0).toFixed(2).replace('.', ','),
     });
+    
+    // Carregar itens do pedido
+    const orderItems = await Database.getOrderItems(order.id);
+    // Adicionar campo unit_price_text para cada item
+    const orderItemsWithText = orderItems.map(item => ({
+      ...item,
+      unit_price_text: item.unit_price > 0 ? item.unit_price.toFixed(2).replace('.', ',') : ''
+    }));
+    setSelectedProducts(orderItemsWithText);
     setModalVisible(true);
   };
 
   const handleSaveOrder = async () => {
-    if (!formData.customer_id || !formData.product_id || !formData.quantity) {
-      Alert.alert('Erro', 'Preencha todos os campos obrigatórios');
+    if (!formData.customer_id || selectedProducts.length === 0) {
+      Alert.alert('Erro', 'Selecione um cliente e pelo menos um produto');
       return;
     }
 
     try {
+      const totalAmount = selectedProducts.reduce((total, product) => total + product.total_price, 0);
+      
       const orderData = {
         customer_id: parseInt(formData.customer_id),
-        product_id: parseInt(formData.product_id),
-        quantity: parseInt(formData.quantity),
         status: formData.status,
         notes: formData.notes,
+        total_amount: totalAmount,
+        paid_amount: parseFloat(cleanCurrencyValue(formData.paid_amount)) || 0,
       };
 
       if (editingOrder) {
+        // Atualizar pedido existente
         await Database.updateOrderStatus(editingOrder.id, formData.status);
-        Alert.alert('Sucesso', 'Pedido atualizado com sucesso');
+        await Database.updateOrderPaidAmount(editingOrder.id, parseFloat(cleanCurrencyValue(formData.paid_amount)) || 0);
+        showSuccessModal('Pedido atualizado com sucesso');
       } else {
-        await Database.addOrder(orderData);
-        Alert.alert('Sucesso', 'Pedido criado com sucesso');
+        // Criar novo pedido
+        const orderId = await Database.addOrder(orderData);
+        
+        // Adicionar itens do pedido
+        for (const product of selectedProducts) {
+          await Database.addOrderItem({
+            order_id: orderId,
+            product_id: product.id,
+            quantity: product.quantity,
+            unit_price: product.unit_price,
+            total_price: product.total_price,
+          });
+        }
+        
+        showSuccessModal('Pedido criado com sucesso');
       }
 
       setModalVisible(false);
@@ -175,33 +232,28 @@ const OrdersScreen = ({ navigation, route }) => {
   };
 
   const handleDeleteOrder = (order) => {
-    Alert.alert(
-      'Confirmar Exclusão',
-      `Deseja realmente excluir este pedido?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Note: You might want to add a deleteOrder method to Database
-              Alert.alert('Sucesso', 'Pedido excluído com sucesso');
-              loadData();
-            } catch (error) {
-              console.error('Erro ao excluir pedido:', error);
-              Alert.alert('Erro', 'Não foi possível excluir o pedido');
-            }
-          },
-        },
-      ]
-    );
+    setOrderToDelete(order);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    
+    try {
+      await Database.deleteOrder(orderToDelete.id);
+      showSuccessModal('Pedido excluído com sucesso');
+      setDeleteModalVisible(false);
+      setOrderToDelete(null);
+      loadData();
+    } catch (error) {
+      console.error('Erro ao excluir pedido:', error);
+      Alert.alert('Erro', 'Não foi possível excluir o pedido');
+    }
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
       await Database.updateOrderStatus(orderId, newStatus);
-      Alert.alert('Sucesso', 'Status do pedido atualizado');
       loadData();
     } catch (error) {
       console.error('Erro ao atualizar status:', error);
@@ -209,11 +261,33 @@ const OrdersScreen = ({ navigation, route }) => {
     }
   };
 
+  const showSuccessModal = (message) => {
+    setSuccessMessage(message);
+    setSuccessModalVisible(true);
+  };
+
+  const handleApplyFilters = (filters) => {
+    setStatusFilter(filters.statusFilter);
+    setCustomerFilter(filters.customerFilter);
+    setSortOrder(filters.sortOrder);
+  };
+
+  const updatePaidAmount = async (orderId, paidAmount) => {
+    try {
+      await Database.updateOrderPaidAmount(orderId, paidAmount);
+      showSuccessModal('Valor pago atualizado');
+      loadData();
+    } catch (error) {
+      console.error('Erro ao atualizar valor pago:', error);
+      Alert.alert('Erro', 'Não foi possível atualizar o valor pago');
+    }
+  };
+
 
   const renderOrder = ({ item }) => (
     <Card style={styles.orderCard}>
       <View style={styles.orderHeader}>
-        <Text style={styles.orderId}>Pedido #{item.id}</Text>
+        <Text style={styles.orderId}>Pedido Nº {item.id}</Text>
         <View style={[styles.statusBadge, { backgroundColor: statusColors[item.status] }]}>
           <Text style={styles.statusText}>{statusLabels[item.status]}</Text>
         </View>
@@ -224,10 +298,13 @@ const OrdersScreen = ({ navigation, route }) => {
           <Text style={styles.detailLabel}>Cliente:</Text> {item.customer_name}
         </Text>
         <Text style={styles.orderDetail}>
-          <Text style={styles.detailLabel}>Produto:</Text> {item.product_name}
+          <Text style={styles.detailLabel}>Total:</Text> R$ {formatCurrency(item.total_amount || 0)}
         </Text>
         <Text style={styles.orderDetail}>
-          <Text style={styles.detailLabel}>Quantidade:</Text> {item.quantity}
+          <Text style={styles.detailLabel}>Pago:</Text> R$ {formatCurrency(item.paid_amount || 0)}
+        </Text>
+        <Text style={styles.orderDetail}>
+          <Text style={styles.detailLabel}>Restante:</Text> R$ {formatCurrency((item.total_amount || 0) - (item.paid_amount || 0))}
         </Text>
         {item.notes && (
           <Text style={styles.orderDetail}>
@@ -246,7 +323,10 @@ const OrdersScreen = ({ navigation, route }) => {
               key={status}
               style={[
                 styles.statusButton,
-                item.status === status && styles.statusButtonActive
+                item.status === status && {
+                  backgroundColor: statusColors[status],
+                  borderColor: statusColors[status],
+                }
               ]}
               onPress={() => updateOrderStatus(item.id, status)}
             >
@@ -293,9 +373,17 @@ const OrdersScreen = ({ navigation, route }) => {
       <Header 
         title="Pedidos" 
         rightComponent={
-          <TouchableOpacity onPress={handleNewOrder}>
-            <Text style={styles.addButton}>+</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => setFilterModalVisible(true)}
+              
+            >
+              <Text style={styles.filterButtonText}>🔍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleNewOrder}>
+              <Text style={styles.addButton}>+</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
       
@@ -316,54 +404,6 @@ const OrdersScreen = ({ navigation, route }) => {
           </View>
         </View>
 
-        <View style={styles.filtersContainer}>
-          <View style={styles.filterRow}>
-            <Text style={styles.filterLabel}>Filtrar por status:</Text>
-            <View style={styles.filterButtons}>
-              <TouchableOpacity
-                style={[styles.filterButton, statusFilter === 'all' && styles.filterButtonActive]}
-                onPress={() => setStatusFilter('all')}
-              >
-                <Text style={[styles.filterButtonText, statusFilter === 'all' && styles.filterButtonTextActive]}>
-                  Todos
-                </Text>
-              </TouchableOpacity>
-              {Object.keys(statusLabels).map(status => (
-                <TouchableOpacity
-                  key={status}
-                  style={[styles.filterButton, statusFilter === status && styles.filterButtonActive]}
-                  onPress={() => setStatusFilter(status)}
-                >
-                  <Text style={[styles.filterButtonText, statusFilter === status && styles.filterButtonTextActive]}>
-                    {statusLabels[status]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          
-          <View style={styles.filterRow}>
-            <Text style={styles.filterLabel}>Ordenar por data:</Text>
-            <View style={styles.sortButtons}>
-              <TouchableOpacity
-                style={[styles.sortButton, sortOrder === 'newest' && styles.sortButtonActive]}
-                onPress={() => setSortOrder('newest')}
-              >
-                <Text style={[styles.sortButtonText, sortOrder === 'newest' && styles.sortButtonTextActive]}>
-                  Mais recentes
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sortButton, sortOrder === 'oldest' && styles.sortButtonActive]}
-                onPress={() => setSortOrder('oldest')}
-              >
-                <Text style={[styles.sortButtonText, sortOrder === 'oldest' && styles.sortButtonTextActive]}>
-                  Mais antigos
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
         
         <FlatList
           data={filteredOrders}
@@ -390,22 +430,10 @@ const OrdersScreen = ({ navigation, route }) => {
             displayKey="name"
           />
 
-          <InlineDropdown
-            label="Produto *"
-            placeholder="Selecione um produto"
-            data={products}
-            value={formData.product_id}
-            onSelect={(value) => setFormData({ ...formData, product_id: value })}
-            searchKey="name"
-            displayKey="name"
-          />
-
-          <QuantityCounter
-            label="Quantidade *"
-            value={formData.quantity}
-            onValueChange={(value) => setFormData({ ...formData, quantity: value })}
-            min={1}
-            max={999}
+          <ProductSelector
+            products={products}
+            selectedProducts={selectedProducts}
+            onProductsChange={setSelectedProducts}
           />
 
           <View style={styles.section}>
@@ -416,7 +444,10 @@ const OrdersScreen = ({ navigation, route }) => {
                   key={status}
                   style={[
                     styles.statusButton,
-                    formData.status === status && styles.statusButtonActive
+                    formData.status === status && {
+                      backgroundColor: statusColors[status],
+                      borderColor: statusColors[status],
+                    }
                   ]}
                   onPress={() => setFormData({ ...formData, status })}
                 >
@@ -430,6 +461,13 @@ const OrdersScreen = ({ navigation, route }) => {
               ))}
             </View>
           </View>
+
+          <CurrencyInput
+            label="Valor Pago"
+            value={formData.paid_amount}
+            onChangeText={(text) => setFormData({ ...formData, paid_amount: text })}
+            placeholder="0,00"
+          />
 
           <Input
             label="Observações"
@@ -455,6 +493,36 @@ const OrdersScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        onApplyFilters={handleApplyFilters}
+        customers={customers}
+        statusLabels={statusLabels}
+        statusFilter={statusFilter}
+        customerFilter={customerFilter}
+        sortOrder={sortOrder}
+      />
+
+      <SuccessModal
+        visible={successModalVisible}
+        onClose={() => setSuccessModalVisible(false)}
+        message={successMessage}
+      />
+
+      <ConfirmDeleteModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false);
+          setOrderToDelete(null);
+        }}
+        onConfirm={confirmDeleteOrder}
+        title="Confirmar Exclusão"
+        message={`Deseja realmente excluir o pedido #${orderToDelete?.id}?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+      />
     </SafeAreaView>
   );
 };
@@ -462,11 +530,11 @@ const OrdersScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -479,12 +547,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeTab: {
-    backgroundColor: '#2E86AB',
+    backgroundColor: colors.primary,
   },
   tabText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6C757D',
+    color: colors.textMuted,
   },
   activeTabText: {
     color: '#FFFFFF',
@@ -492,19 +560,49 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  addButton: {
-    fontSize: 24,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+  },
+  filterButton: {
+    marginRight: 12,
+    padding: 8,
+    backgroundColor: '#D61A75',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  filterButtonText: {
+    fontSize: 18,
     color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  addButton: {
+    marginLeft: 16,
+    fontSize: 24,
+    color: '#D61A75',
     fontWeight: 'bold',
   },
   summary: {
     padding: 16,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    margin: 16,
   },
   summaryText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2E86AB',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   statusSummary: {
@@ -525,7 +623,7 @@ const styles = StyleSheet.create({
   },
   statusSummaryText: {
     fontSize: 12,
-    color: '#2E86AB',
+    color: colors.textPrimary,
   },
   listContainer: {
     padding: 16,
@@ -542,18 +640,18 @@ const styles = StyleSheet.create({
   saleId: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
   },
   saleDate: {
     fontSize: 14,
-    color: '#6C757D',
+    color: colors.textSecondary,
   },
   saleDetails: {
     marginTop: 8,
   },
   saleDetail: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   orderCard: {
@@ -568,7 +666,7 @@ const styles = StyleSheet.create({
   orderId: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -585,16 +683,16 @@ const styles = StyleSheet.create({
   },
   orderDetail: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   detailLabel: {
     fontWeight: '600',
-    color: '#2E86AB',
+    color: colors.primary,
   },
   orderActions: {
     borderTopWidth: 1,
-    borderTopColor: '#E9ECEF',
+    borderTopColor: colors.border,
     paddingTop: 12,
   },
   statusButtons: {
@@ -607,18 +705,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginRight: 4,
     marginBottom: 4,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.backgroundSecondary,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DDDDDD',
+    borderColor: colors.border,
   },
   statusButtonActive: {
-    backgroundColor: '#2E86AB',
-    borderColor: '#2E86AB',
   },
   statusButtonText: {
     fontSize: 12,
-    color: '#333333',
+    color: colors.textPrimary,
   },
   statusButtonTextActive: {
     color: '#FFFFFF',
@@ -633,9 +729,11 @@ const styles = StyleSheet.create({
   },
   editButton: {
     fontSize: 16,
+    color: colors.primary,
   },
   deleteButton: {
     fontSize: 16,
+    color: colors.error,
   },
   form: {
     flex: 1,
@@ -646,7 +744,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   selector: {
@@ -656,18 +754,16 @@ const styles = StyleSheet.create({
   option: {
     padding: 8,
     margin: 4,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#DDDDDD',
   },
   optionSelected: {
-    backgroundColor: '#2E86AB',
-    borderColor: '#2E86AB',
   },
   optionText: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
   },
   optionTextSelected: {
     color: '#FFFFFF',
@@ -683,7 +779,7 @@ const styles = StyleSheet.create({
   },
   filtersContainer: {
     padding: 16,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: '#E9ECEF',
   },
@@ -693,7 +789,7 @@ const styles = StyleSheet.create({
   filterLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   filterButtons: {
@@ -711,12 +807,10 @@ const styles = StyleSheet.create({
     borderColor: '#DDDDDD',
   },
   filterButtonActive: {
-    backgroundColor: '#2E86AB',
-    borderColor: '#2E86AB',
   },
   filterButtonText: {
     fontSize: 12,
-    color: '#333333',
+    color: colors.textPrimary,
   },
   filterButtonTextActive: {
     color: '#FFFFFF',
@@ -734,12 +828,10 @@ const styles = StyleSheet.create({
     borderColor: '#DDDDDD',
   },
   sortButtonActive: {
-    backgroundColor: '#2E86AB',
-    borderColor: '#2E86AB',
   },
   sortButtonText: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
   },
   sortButtonTextActive: {
     color: '#FFFFFF',
@@ -750,7 +842,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   statusButtons: {
@@ -762,18 +854,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginRight: 8,
     marginBottom: 8,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#DDDDDD',
   },
   statusButtonActive: {
-    backgroundColor: '#2E86AB',
-    borderColor: '#2E86AB',
   },
   statusButtonText: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
     fontWeight: '600',
   },
   statusButtonTextActive: {

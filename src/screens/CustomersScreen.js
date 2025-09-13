@@ -9,17 +9,30 @@ import {
   FlatList 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Input from '../components/Input';
+import MaskedInput from '../components/MaskedInput';
 import Database from '../database/database';
+import { formatPhone } from '../utils/formatters';
+import colors from '../theme/colors';
+import SuccessModal from '../components/SuccessModal';
+import ConfirmModal from '../components/ConfirmModal';
+import ErrorModal from '../components/ErrorModal';
 
 const CustomersScreen = ({ navigation, route }) => {
   const [customers, setCustomers] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -29,6 +42,13 @@ const CustomersScreen = ({ navigation, route }) => {
   useEffect(() => {
     loadCustomers();
   }, []);
+
+  // Recarregar dados sempre que a tela receber foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadCustomers();
+    }, [])
+  );
 
   useEffect(() => {
     const checkPendingAction = async () => {
@@ -63,6 +83,12 @@ const CustomersScreen = ({ navigation, route }) => {
     }
   };
 
+  const showSuccessModal = (message) => {
+    setSuccessMessage(message);
+    setSuccessModalVisible(true);
+  };
+
+
   const handleAddCustomer = () => {
     setEditingCustomer(null);
     setFormData({
@@ -95,10 +121,10 @@ const CustomersScreen = ({ navigation, route }) => {
 
       if (editingCustomer) {
         await Database.updateCustomer(editingCustomer.id, customerData);
-        Alert.alert('Sucesso', 'Cliente atualizado com sucesso');
+        showSuccessModal('Cliente atualizado com sucesso');
       } else {
         await Database.addCustomer(customerData);
-        Alert.alert('Sucesso', 'Cliente adicionado com sucesso');
+        showSuccessModal('Cliente adicionado com sucesso');
       }
 
       setModalVisible(false);
@@ -109,28 +135,37 @@ const CustomersScreen = ({ navigation, route }) => {
     }
   };
 
-  const handleDeleteCustomer = (customer) => {
-    Alert.alert(
-      'Confirmar Exclusão',
-      `Deseja realmente excluir o cliente "${customer.name}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Excluir',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await Database.deleteCustomer(customer.id);
-              Alert.alert('Sucesso', 'Cliente excluído com sucesso');
-              loadCustomers();
-            } catch (error) {
-              console.error('Erro ao excluir cliente:', error);
-              Alert.alert('Erro', 'Não foi possível excluir o cliente');
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteCustomer = async (customer) => {
+    try {
+      // Verificar se o cliente está sendo usado em pedidos
+      const isInUse = await Database.isCustomerInUse(customer.id);
+      
+      if (isInUse) {
+        setErrorMessage(`O cliente "${customer.name}" possui pedidos e não pode ser excluído.`);
+        setErrorModalVisible(true);
+        return;
+      }
+
+      setCustomerToDelete(customer);
+      setConfirmModalVisible(true);
+    } catch (error) {
+      console.error('Erro ao verificar uso do cliente:', error);
+      setErrorMessage('Não foi possível verificar se o cliente está em uso');
+      setErrorModalVisible(true);
+    }
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await Database.deleteCustomer(customerToDelete.id);
+      showSuccessModal('Cliente excluído com sucesso');
+      loadCustomers();
+      setConfirmModalVisible(false);
+      setCustomerToDelete(null);
+    } catch (error) {
+      console.error('Erro ao excluir cliente:', error);
+      Alert.alert('Erro', 'Não foi possível excluir o cliente');
+    }
   };
 
   const renderCustomer = ({ item }) => (
@@ -156,7 +191,7 @@ const CustomersScreen = ({ navigation, route }) => {
       <View style={styles.customerDetails}>
         {item.phone && (
           <Text style={styles.customerDetail}>
-            <Text style={styles.detailLabel}>📞 Telefone:</Text> {item.phone}
+            <Text style={styles.detailLabel}>📞 Telefone:</Text> {formatPhone(item.phone)}
           </Text>
         )}
         {item.email && (
@@ -216,12 +251,12 @@ const CustomersScreen = ({ navigation, route }) => {
             placeholder="Ex: João Silva"
           />
           
-          <Input
+          <MaskedInput
             label="Telefone"
             value={formData.phone}
             onChangeText={(text) => setFormData({ ...formData, phone: text })}
             placeholder="(11) 99999-9999"
-            keyboardType="phone-pad"
+            mask="phone"
           />
           
           <View style={styles.buttonContainer}>
@@ -239,6 +274,30 @@ const CustomersScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
+
+      <SuccessModal
+        visible={successModalVisible}
+        onClose={() => setSuccessModalVisible(false)}
+        message={successMessage}
+      />
+
+      <ConfirmModal
+        visible={confirmModalVisible}
+        onClose={() => setConfirmModalVisible(false)}
+        onConfirm={confirmDelete}
+        title="Confirmar Exclusão"
+        message={`Deseja realmente excluir o cliente "${customerToDelete?.name}"?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+      />
+
+      <ErrorModal
+        visible={errorModalVisible}
+        onClose={() => setErrorModalVisible(false)}
+        title="Não é possível excluir"
+        message={errorMessage}
+        buttonText="OK"
+      />
     </SafeAreaView>
   );
 };
@@ -246,24 +305,28 @@ const CustomersScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
   },
   addButton: {
     fontSize: 24,
-    color: '#FFFFFF',
+    color: '#D61A75',
     fontWeight: 'bold',
   },
   summary: {
     padding: 16,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    margin: 16,
   },
   summaryText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2E86AB',
+    color: colors.textPrimary,
   },
   listContainer: {
     padding: 16,
@@ -280,7 +343,7 @@ const styles = StyleSheet.create({
   customerName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     flex: 1,
   },
   customerActions: {
@@ -292,21 +355,23 @@ const styles = StyleSheet.create({
   },
   editButton: {
     fontSize: 16,
+    color: colors.primary,
   },
   deleteButton: {
     fontSize: 16,
+    color: colors.error,
   },
   customerDetails: {
     marginTop: 8,
   },
   customerDetail: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   detailLabel: {
     fontWeight: '600',
-    color: '#2E86AB',
+    color: colors.primary,
   },
   form: {
     maxHeight: 400,

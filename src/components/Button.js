@@ -1,5 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import colors from '../theme/colors';
 
 const Button = ({ title, onPress, variant = 'primary', style, textStyle, disabled = false }) => {
   const buttonStyle = [
@@ -32,47 +33,52 @@ const styles = StyleSheet.create({
   button: {
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 48,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   text: {
     fontSize: 16,
     fontWeight: '600',
   },
   primary: {
-    backgroundColor: '#2E86AB',
+    backgroundColor: colors.primary,
   },
   primaryText: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
   },
   secondary: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: '#2E86AB',
+    borderColor: colors.primary,
   },
   secondaryText: {
-    color: '#2E86AB',
+    color: colors.primary,
   },
   success: {
-    backgroundColor: '#28A745',
+    backgroundColor: colors.success,
   },
   successText: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
   },
   danger: {
-    backgroundColor: '#DC3545',
+    backgroundColor: colors.error,
   },
   dangerText: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
   },
   disabled: {
-    backgroundColor: '#6C757D',
+    backgroundColor: colors.textMuted,
     opacity: 0.6,
   },
   disabledText: {
-    color: '#FFFFFF',
+    color: colors.textPrimary,
   },
 });
 

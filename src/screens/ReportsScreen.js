@@ -9,9 +9,11 @@ import {
   FlatList 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import Database from '../database/database';
+import colors from '../theme/colors';
 
 const ReportsScreen = ({ navigation }) => {
   const [reports, setReports] = useState({
@@ -30,64 +32,72 @@ const ReportsScreen = ({ navigation }) => {
     loadReports();
   }, []);
 
+  // Recarregar dados sempre que a tela receber foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadReports();
+    }, [])
+  );
+
   const loadReports = async () => {
     try {
       setLoading(true);
       await Database.init();
       
-      const [orders, topProducts] = await Promise.all([
+      const [orders, topProducts, orderItemsWithCosts] = await Promise.all([
         Database.getOrders(),
-        Database.getTopProducts(5),
+        Database.getTopProducts(10), // Aumentar para 10 produtos
+        Database.getAllOrderItemsWithCosts(),
       ]);
 
-      // Considerar apenas pedidos pagos para vendas
-      const paidOrders = orders.filter(order => order.status === 'paid');
-      
-      // Calcular valores apenas dos pedidos pagos
-      const totalRevenue = paidOrders.reduce((sum, order) => {
-        const product = topProducts.find(p => p.id === order.product_id);
-        return sum + ((product?.sale_price || 0) * order.quantity);
+      // Calcular valores baseados no valor pago de todos os pedidos
+      const totalRevenue = orders.reduce((sum, order) => {
+        return sum + (order.paid_amount || 0);
       }, 0);
       
-      const totalCost = paidOrders.reduce((sum, order) => {
-        const product = topProducts.find(p => p.id === order.product_id);
-        return sum + ((product?.cost_price || 0) * order.quantity);
+      // Calcular custo total real - valor que você gastou com todos os produtos
+      const totalCost = orderItemsWithCosts.reduce((sum, item) => {
+        return sum + (item.cost_price * item.quantity);
       }, 0);
       
       const totalProfit = totalRevenue - totalCost;
       
-      // Calcular "a receber" - pedidos com status "encomenda" e com cliente
-      const ordersToReceive = orders.filter(order => 
-        order.status === 'order' && order.customer_id
-      );
-      
-      const totalToReceive = ordersToReceive.reduce((sum, order) => {
-        const product = topProducts.find(p => p.id === order.product_id);
-        return sum + ((product?.sale_price || 0) * order.quantity);
+      // Calcular "a receber" - diferença entre total e valor pago de todos os pedidos
+      const totalToReceive = orders.reduce((sum, order) => {
+        const remaining = (order.total_amount || 0) - (order.paid_amount || 0);
+        return sum + Math.max(0, remaining); // Só considerar valores positivos
       }, 0);
 
-      // Relatório dos últimos 30 dias (apenas pedidos pagos)
+      // Relatório dos últimos 30 dias (valores pagos)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const recentPaidOrders = paidOrders.filter(order => 
+      const recentOrders = orders.filter(order => 
         new Date(order.created_at) >= thirtyDaysAgo
       );
 
-      const recentRevenue = recentPaidOrders.reduce((sum, order) => {
-        const product = topProducts.find(p => p.id === order.product_id);
-        return sum + ((product?.sale_price || 0) * order.quantity);
+      const recentRevenue = recentOrders.reduce((sum, order) => {
+        return sum + (order.paid_amount || 0);
       }, 0);
       
-      const recentCost = recentPaidOrders.reduce((sum, order) => {
-        const product = topProducts.find(p => p.id === order.product_id);
-        return sum + ((product?.cost_price || 0) * order.quantity);
+      // Calcular custo dos últimos 30 dias baseado nos itens reais
+      const recentOrderItems = orderItemsWithCosts.filter(item => {
+        const order = orders.find(o => o.id === item.order_id);
+        return order && new Date(order.created_at) >= thirtyDaysAgo;
+      });
+      
+      const recentCost = recentOrderItems.reduce((sum, item) => {
+        return sum + (item.cost_price * item.quantity);
       }, 0);
       
       const recentProfit = recentRevenue - recentCost;
 
+      // Contar pedidos que têm valor pago
+      const paidOrdersCount = orders.filter(order => (order.paid_amount || 0) > 0).length;
+      const recentPaidOrdersCount = recentOrders.filter(order => (order.paid_amount || 0) > 0).length;
+
       setReports({
         salesReport: {
-          total_sales: recentPaidOrders.length,
+          total_sales: recentPaidOrdersCount,
           total_revenue: recentRevenue,
           total_cost: recentCost,
           total_profit: recentProfit,
@@ -96,7 +106,7 @@ const ReportsScreen = ({ navigation }) => {
         totalRevenue,
         totalCost,
         totalProfit,
-        totalSales: paidOrders.length,
+        totalSales: paidOrdersCount,
         totalToReceive,
         totalOrders: orders.length,
       });
@@ -108,29 +118,35 @@ const ReportsScreen = ({ navigation }) => {
     }
   };
 
-  const StatCard = ({ title, value, subtitle, color = '#2E86AB' }) => (
-    <Card style={[styles.statCard, { borderLeftColor: color }]}>
+  const StatCard = ({ title, value, subtitle, color = colors.primary }) => (
+    <Card noMargin style={[styles.statCard, { borderLeftColor: color }]}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
       {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
     </Card>
   );
 
+  const ProductCard = ({ item, index }) => (
+    <View style={styles.productRow}>
+      <View style={styles.rankContainer}>
+        <Text style={styles.productRank}>{index + 1}º</Text>
+      </View>
+      <View style={styles.productInfo}>
+        <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.productStats}>
+          <Text style={styles.productStat}>
+            <Text style={styles.statLabel}>Vendidos:</Text> {item.total_sold}
+          </Text>
+          <Text style={styles.productStat}>
+            <Text style={styles.statLabel}>Receita:</Text> R$ {(item.total_revenue || 0).toFixed(2).replace('.', ',')}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+
   const renderTopProduct = ({ item, index }) => (
-    <Card style={styles.productCard}>
-      <View style={styles.productHeader}>
-        <Text style={styles.productRank}>#{index + 1}</Text>
-        <Text style={styles.productName}>{item.name}</Text>
-      </View>
-      <View style={styles.productStats}>
-        <Text style={styles.productStat}>
-          <Text style={styles.statLabel}>Vendidos:</Text> {item.total_sold}
-        </Text>
-        <Text style={styles.productStat}>
-          <Text style={styles.statLabel}>Receita:</Text> R$ {(item.total_revenue || 0).toFixed(2)}
-        </Text>
-      </View>
-    </Card>
+    <ProductCard item={item} index={index} />
   );
 
   if (loading) {
@@ -151,47 +167,45 @@ const ReportsScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <Header 
         title="Relatórios" 
-        rightComponent={
-          <TouchableOpacity onPress={loadReports}>
-            <Text style={styles.refreshButton}>🔄</Text>
-          </TouchableOpacity>
-        }
       />
       
       <ScrollView style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Resumo Geral</Text>
           <View style={styles.statsGrid}>
+            {/* Primeira linha */}
             <StatCard 
-              title="Total de Vendas (Pagas)" 
+              title="Total de Vendas (Com Pagamento)" 
               value={reports.totalSales} 
-              color="#17A2B8"
-            />
-            <StatCard 
-              title="Receita Total" 
-              value={`R$ ${(reports.totalRevenue || 0).toFixed(2)}`} 
-              color="#28A745"
-            />
-            <StatCard 
-              title="Custo Total" 
-              value={`R$ ${(reports.totalCost || 0).toFixed(2)}`} 
-              color="#FFC107"
-            />
-            <StatCard 
-              title="Lucro Total" 
-              value={`R$ ${(reports.totalProfit || 0).toFixed(2)}`} 
-              color="#DC3545"
-            />
-            <StatCard 
-              title="A Receber" 
-              value={`R$ ${(reports.totalToReceive || 0).toFixed(2)}`} 
-              color="#6F42C1"
-              subtitle="Pedidos em encomenda"
+              color={colors.info}
             />
             <StatCard 
               title="Total de Pedidos" 
               value={reports.totalOrders} 
-              color="#6C757D"
+              color={colors.textMuted}
+            />
+            {/* Segunda linha */}
+            <StatCard 
+              title="Custo Total" 
+              value={`R$ ${(reports.totalCost || 0).toFixed(2).replace('.', ',')}`} 
+              color={colors.warning}
+            />
+            <StatCard 
+              title="Receita Total" 
+              value={`R$ ${(reports.totalRevenue || 0).toFixed(2).replace('.', ',')}`} 
+              color={colors.success}
+            />
+            {/* Terceira linha */}
+            <StatCard 
+              title="Lucro Total" 
+              value={`R$ ${(reports.totalProfit || 0).toFixed(2).replace('.', ',')}`} 
+              color={colors.error}
+            />
+            <StatCard 
+              title="A Receber" 
+              value={`R$ ${(reports.totalToReceive || 0).toFixed(2).replace('.', ',')}`} 
+              color={colors.accent}
+              subtitle="Valores pendentes"
             />
           </View>
         </View>
@@ -200,25 +214,27 @@ const ReportsScreen = ({ navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Últimos 30 Dias</Text>
             <View style={styles.statsGrid}>
+              {/* Primeira linha */}
               <StatCard 
                 title="Vendas" 
                 value={reports.salesReport.total_sales} 
-                color="#17A2B8"
+                color={colors.info}
               />
               <StatCard 
                 title="Receita" 
-                value={`R$ ${(reports.salesReport.total_revenue || 0).toFixed(2)}`} 
-                color="#28A745"
+                value={`R$ ${(reports.salesReport.total_revenue || 0).toFixed(2).replace('.', ',')}`} 
+                color={colors.success}
               />
+              {/* Segunda linha */}
               <StatCard 
                 title="Custo" 
-                value={`R$ ${(reports.salesReport.total_cost || 0).toFixed(2)}`} 
-                color="#FFC107"
+                value={`R$ ${(reports.salesReport.total_cost || 0).toFixed(2).replace('.', ',')}`} 
+                color={colors.warning}
               />
               <StatCard 
                 title="Lucro" 
-                value={`R$ ${(reports.salesReport.total_profit || 0).toFixed(2)}`} 
-                color="#DC3545"
+                value={`R$ ${(reports.salesReport.total_profit || 0).toFixed(2).replace('.', ',')}`} 
+                color={colors.error}
               />
             </View>
           </View>
@@ -227,12 +243,15 @@ const ReportsScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Produtos Mais Vendidos</Text>
           {reports.topProducts.length > 0 ? (
-            <FlatList
-              data={reports.topProducts}
-              renderItem={renderTopProduct}
-              keyExtractor={(item, index) => index.toString()}
-              scrollEnabled={false}
-            />
+            <Card>
+              <FlatList
+                data={reports.topProducts}
+                renderItem={renderTopProduct}
+                keyExtractor={(item, index) => index.toString()}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+              />
+            </Card>
           ) : (
             <Card>
               <Text style={styles.noDataText}>Nenhum produto vendido ainda</Text>
@@ -253,7 +272,7 @@ const ReportsScreen = ({ navigation }) => {
               </Text>
               <Text style={styles.analysisSubtitle}>
                 {(reports.totalRevenue || 0) > 0 
-                  ? `R$ ${(reports.totalProfit || 0).toFixed(2)} de lucro em R$ ${(reports.totalRevenue || 0).toFixed(2)} de receita`
+                  ? `R$ ${(reports.totalProfit || 0).toFixed(2).replace('.', ',')} de lucro em R$ ${(reports.totalRevenue || 0).toFixed(2).replace('.', ',')} de receita`
                   : 'Nenhuma venda realizada'
                 }
               </Text>
@@ -268,13 +287,13 @@ const ReportsScreen = ({ navigation }) => {
               <View style={styles.financialRow}>
                 <Text style={styles.financialLabel}>Receita Total:</Text>
                 <Text style={[styles.financialValue, styles.positiveValue]}>
-                  R$ {(reports.totalRevenue || 0).toFixed(2)}
+                  R$ {(reports.totalRevenue || 0).toFixed(2).replace('.', ',')}
                 </Text>
               </View>
               <View style={styles.financialRow}>
                 <Text style={styles.financialLabel}>Custo Total:</Text>
                 <Text style={[styles.financialValue, styles.negativeValue]}>
-                  -R$ {(reports.totalCost || 0).toFixed(2)}
+                  -R$ {(reports.totalCost || 0).toFixed(2).replace('.', ',')}
                 </Text>
               </View>
               <View style={[styles.financialRow, styles.financialTotal]}>
@@ -283,7 +302,7 @@ const ReportsScreen = ({ navigation }) => {
                   styles.financialValue, 
                   (reports.totalProfit || 0) >= 0 ? styles.positiveValue : styles.negativeValue
                 ]}>
-                  R$ {(reports.totalProfit || 0).toFixed(2)}
+                  R$ {(reports.totalProfit || 0).toFixed(2).replace('.', ',')}
                 </Text>
               </View>
             </View>
@@ -297,14 +316,10 @@ const ReportsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-  },
-  refreshButton: {
-    fontSize: 20,
-    color: '#FFFFFF',
   },
   loadingContainer: {
     flex: 1,
@@ -313,7 +328,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#6C757D',
+    color: colors.textMuted,
   },
   section: {
     padding: 16,
@@ -321,54 +336,79 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    gap: 8,
   },
   statCard: {
     width: '48%',
     marginBottom: 12,
     borderLeftWidth: 4,
-    padding: 16,
+    padding: 12,
+    minHeight: 80,
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 4,
-  },
-  statTitle: {
-    fontSize: 14,
-    color: '#6C757D',
+    color: colors.textPrimary,
     marginBottom: 2,
   },
-  statSubtitle: {
+  statTitle: {
     fontSize: 12,
-    color: '#6C757D',
+    color: colors.textSecondary,
+    marginBottom: 2,
+    lineHeight: 16,
   },
-  productCard: {
-    marginBottom: 8,
+  statSubtitle: {
+    fontSize: 10,
+    color: colors.textMuted,
+    lineHeight: 12,
   },
-  productHeader: {
+  productRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rankContainer: {
+    marginRight: 12,
+    alignItems: 'center',
   },
   productRank: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2E86AB',
-    marginRight: 8,
+    color: '#FFFFFF',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    textAlign: 'center',
+    minWidth: 32,
+  },
+  productInfo: {
+    flex: 1,
   },
   productName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
-    flex: 1,
+    color: colors.textPrimary,
+    marginBottom: 4,
   },
   productStats: {
     flexDirection: 'row',
@@ -376,15 +416,15 @@ const styles = StyleSheet.create({
   },
   productStat: {
     fontSize: 14,
-    color: '#333333',
+    color: colors.textSecondary,
   },
   statLabel: {
     fontWeight: '600',
-    color: '#2E86AB',
+    color: colors.primary,
   },
   noDataText: {
     fontSize: 16,
-    color: '#6C757D',
+    color: colors.textMuted,
     textAlign: 'center',
     fontStyle: 'italic',
   },
@@ -395,18 +435,18 @@ const styles = StyleSheet.create({
   analysisTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   analysisValue: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#28A745',
+    color: colors.success,
     marginBottom: 4,
   },
   analysisSubtitle: {
     fontSize: 14,
-    color: '#6C757D',
+    color: colors.textMuted,
     textAlign: 'center',
   },
   financialSummary: {
@@ -418,18 +458,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    borderBottomColor: colors.border,
   },
   financialTotal: {
     borderBottomWidth: 0,
     borderTopWidth: 2,
-    borderTopColor: '#2E86AB',
+    borderTopColor: colors.primary,
     marginTop: 8,
     paddingTop: 16,
   },
   financialLabel: {
     fontSize: 16,
-    color: '#333333',
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   financialValue: {
@@ -437,10 +477,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   positiveValue: {
-    color: '#28A745',
+    color: colors.success,
   },
   negativeValue: {
-    color: '#DC3545',
+    color: colors.error,
   },
 });
 

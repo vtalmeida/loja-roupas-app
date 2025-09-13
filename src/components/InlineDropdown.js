@@ -9,6 +9,7 @@ import {
   Modal,
   Dimensions 
 } from 'react-native';
+import colors from '../theme/colors';
 
 const InlineDropdown = ({ 
   label, 
@@ -18,6 +19,7 @@ const InlineDropdown = ({
   onSelect, 
   searchKey, 
   displayKey,
+  secondaryKey,
   style 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -50,12 +52,19 @@ const InlineDropdown = ({
         style={styles.selectorButton}
         onPress={toggleDropdown}
       >
-        <Text style={[
-          styles.selectorText, 
-          !selectedItem && styles.placeholderText
-        ]}>
-          {selectedItem ? selectedItem[displayKey] : placeholder}
-        </Text>
+        <View style={styles.selectorTextContainer}>
+          <Text style={[
+            styles.selectorText, 
+            !selectedItem && styles.placeholderText
+          ]}>
+            {selectedItem ? selectedItem[displayKey] : placeholder}
+          </Text>
+          {selectedItem && secondaryKey && (
+            <Text style={styles.selectorSecondaryText}>
+              {selectedItem[secondaryKey]}
+            </Text>
+          )}
+        </View>
         <Text style={styles.selectorIcon}>📋</Text>
       </TouchableOpacity>
 
@@ -84,6 +93,7 @@ const InlineDropdown = ({
             <TextInput
               style={styles.searchInput}
               placeholder={`Buscar ${label.toLowerCase()}...`}
+              placeholderTextColor={colors.textMuted}
               value={searchText}
               onChangeText={setSearchText}
               autoFocus
@@ -99,7 +109,14 @@ const InlineDropdown = ({
                   style={styles.optionItem}
                   onPress={() => handleSelect(item)}
                 >
-                  <Text style={styles.optionText}>{item[displayKey]}</Text>
+                  <View style={styles.optionTextContainer}>
+                    <Text style={styles.optionText}>{item[displayKey]}</Text>
+                    {secondaryKey && (
+                      <Text style={styles.optionSecondaryText}>
+                        {item[secondaryKey]}
+                      </Text>
+                    )}
+                  </View>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -117,16 +134,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333333',
+    color: colors.textPrimary,
     marginBottom: 4,
   },
   selectorButton: {
     borderWidth: 1,
-    borderColor: '#DDDDDD',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.backgroundSecondary,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -137,19 +154,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1,
   },
+  selectorTextContainer: {
+    flex: 1,
+  },
   selectorText: {
     fontSize: 16,
-    color: '#333333',
-    flex: 1,
+    color: colors.textPrimary,
     fontWeight: '500',
   },
+  selectorSecondaryText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   placeholderText: {
-    color: '#6C757D',
+    color: colors.textMuted,
     fontStyle: 'italic',
   },
   selectorIcon: {
     fontSize: 16,
-    color: '#2E86AB',
+    color: colors.primary,
     marginLeft: 8,
   },
   modalOverlay: {
@@ -160,7 +185,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundCard,
     borderRadius: 12,
     width: '100%',
     maxHeight: '80%',
@@ -169,6 +194,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -176,12 +203,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     flex: 1,
   },
   closeButton: {
@@ -190,18 +217,19 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 24,
-    color: '#6C757D',
+    color: colors.textMuted,
     fontWeight: 'bold',
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: '#DDDDDD',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     margin: 16,
     fontSize: 16,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.backgroundSecondary,
+    color: colors.textPrimary,
   },
   optionsList: {
     maxHeight: 300,
@@ -209,14 +237,23 @@ const styles = StyleSheet.create({
   optionItem: {
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F8F9FA',
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
   },
+  optionTextContainer: {
+    flex: 1,
+  },
   optionText: {
     fontSize: 16,
-    color: '#333333',
-    flex: 1,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  optionSecondaryText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });
 

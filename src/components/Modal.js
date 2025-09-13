@@ -8,6 +8,7 @@ import {
   TouchableWithoutFeedback,
   ScrollView 
 } from 'react-native';
+import colors from '../theme/colors';
 
 const Modal = ({ 
   visible, 
@@ -63,7 +64,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundCard,
     borderRadius: 12,
     width: '100%',
     maxHeight: '95%',
@@ -72,6 +73,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -79,12 +82,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333333',
+    color: colors.textPrimary,
     flex: 1,
   },
   closeButton: {
@@ -93,7 +96,7 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 24,
-    color: '#6C757D',
+    color: colors.textMuted,
     fontWeight: 'bold',
   },
   content: {
