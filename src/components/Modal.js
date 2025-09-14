@@ -25,32 +25,34 @@ const Modal = ({
       animationType={animationType}
       onRequestClose={onClose}
     >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={() => {}}>
-            <View style={styles.modal}>
-              {title && (
-                <View style={styles.header}>
-                  <Text style={styles.title}>{title}</Text>
-                  {showCloseButton && (
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                      <Text style={styles.closeButtonText}>×</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+      <View style={styles.overlay}>
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.overlayTouchable} />
+        </TouchableWithoutFeedback>
+        <View style={styles.modal}>
+          {title && (
+            <View style={styles.header}>
+              <Text style={styles.title}>{title}</Text>
+              {showCloseButton && (
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>×</Text>
+                </TouchableOpacity>
               )}
-              <ScrollView 
-                style={styles.content} 
-                showsVerticalScrollIndicator={true}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.scrollContent}
-              >
-                {children}
-              </ScrollView>
             </View>
-          </TouchableWithoutFeedback>
+          )}
+          <ScrollView 
+            style={styles.content} 
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            bounces={true}
+          >
+            {children}
+          </ScrollView>
         </View>
-      </TouchableWithoutFeedback>
+      </View>
     </RNModal>
   );
 };
@@ -62,6 +64,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  overlayTouchable: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modal: {
     backgroundColor: colors.backgroundCard,

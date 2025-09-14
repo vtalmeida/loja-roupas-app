@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
+  TextInput,
   StyleSheet, 
   ScrollView, 
   TouchableOpacity,
@@ -26,6 +27,8 @@ import ErrorModal from '../components/ErrorModal';
 
 const CustomersScreen = ({ navigation, route }) => {
   const [customers, setCustomers] = useState([]);
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
+  const [searchText, setSearchText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -42,6 +45,18 @@ const CustomersScreen = ({ navigation, route }) => {
   useEffect(() => {
     loadCustomers();
   }, []);
+
+  // Filtrar clientes quando searchText mudar
+  useEffect(() => {
+    if (searchText.trim() === '') {
+      setFilteredCustomers(customers);
+    } else {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredCustomers(filtered);
+    }
+  }, [searchText, customers]);
 
   // Recarregar dados sempre que a tela receber foco
   useFocusEffect(
@@ -77,6 +92,7 @@ const CustomersScreen = ({ navigation, route }) => {
       await Database.init();
       const customersData = await Database.getCustomers();
       setCustomers(customersData);
+      setFilteredCustomers(customersData);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       Alert.alert('Erro', 'Não foi possível carregar os clientes');
@@ -223,14 +239,24 @@ const CustomersScreen = ({ navigation, route }) => {
       />
       
       <View style={styles.content}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar clientes por nome..."
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
         <View style={styles.summary}>
           <Text style={styles.summaryText}>
-            Total de clientes: {customers.length}
+            Total de clientes: {filteredCustomers.length}
           </Text>
         </View>
         
         <FlatList
-          data={customers}
+          data={filteredCustomers}
           renderItem={renderCustomer}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
@@ -309,6 +335,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  searchContainer: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  searchInput: {
+    backgroundColor: colors.backgroundCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
   addButton: {
     fontSize: 28,

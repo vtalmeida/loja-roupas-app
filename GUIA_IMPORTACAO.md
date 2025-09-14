@@ -6,9 +6,9 @@
 **Erro**: "Arquivo não encontrado. Verifique se o arquivo está na pasta Downloads."
 
 **Soluções**:
-- ✅ Verifique se o arquivo está na pasta **Downloads** do celular
+- ✅ Verifique se o arquivo está na pasta **"Bru Moda Íntima"** dentro de Downloads
 - ✅ Confirme se o nome do arquivo termina com `.xlsx`
-- ✅ Tente exportar novamente e salvar na pasta Downloads
+- ✅ Tente exportar novamente para criar a pasta automaticamente
 
 ### 2. **Arquivo vazio**
 **Erro**: "Arquivo está vazio. Verifique se o arquivo foi exportado corretamente."
@@ -26,7 +26,17 @@
 - ✅ Não modifique a estrutura do arquivo Excel
 - ✅ Não use arquivos criados manualmente
 
-### 4. **Erro de permissão**
+### 4. **Arquivo não é Excel válido**
+**Erro**: "Arquivo inválido. O arquivo selecionado não é um arquivo Excel válido."
+
+**Soluções**:
+- ✅ Verifique se o arquivo é realmente um .xlsx ou .xls
+- ✅ Confirme que o arquivo não está corrompido
+- ✅ Tente abrir o arquivo no Excel ou Google Sheets primeiro
+- ✅ Re-exporte o arquivo se necessário
+- ✅ Verifique se o arquivo não foi salvo em formato incompatível
+
+### 5. **Erro de permissão**
 **Erro**: "Erro ao acessar pasta Downloads"
 
 **Soluções**:
@@ -41,13 +51,13 @@
 2. Vá em **Configurações**
 3. Toque em **"Exportar Dados"**
 4. Aguarde a exportação ser concluída
-5. Confirme que o arquivo foi salvo na pasta Downloads
+5. Confirme que o arquivo foi salvo na pasta **"Bru Moda Íntima"** dentro de Downloads
 
 ### **No App de Destino (Importação)**:
 1. Abra o app onde quer importar
 2. Vá em **Configurações**
 3. Toque em **"Importar Dados"**
-4. Selecione o arquivo da lista
+4. Selecione o arquivo da lista (da pasta "Bru Moda Íntima")
 5. Confirme a importação
 6. Aguarde a conclusão
 

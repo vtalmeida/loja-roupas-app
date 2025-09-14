@@ -100,21 +100,33 @@ class ExcelService {
       // Gerar arquivo Excel
       const excelBuffer = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
       
-      // Salvar arquivo na pasta Downloads (mais acessível)
+      // Criar subpasta específica do app na pasta Downloads
+      const appFolderName = 'Bru Moda Íntima';
+      const appFolderPath = `${RNFS.DownloadDirectoryPath}/${appFolderName}`;
+      
+      // Verificar se a pasta existe, se não existir, criar
+      const folderExists = await RNFS.exists(appFolderPath);
+      if (!folderExists) {
+        await RNFS.mkdir(appFolderPath);
+        console.log('📁 Pasta do app criada:', appFolderPath);
+      }
+      
+      // Salvar arquivo na subpasta do app
       const now = new Date();
       const dateStr = now.toISOString().split('T')[0]; // yyyy-MM-dd
       const timeStr = now.toTimeString().split(' ')[0].substring(0, 5).replace(/:/g, '-'); // HH-mm
       const fileName = `BruModaIntima_${dateStr}_${timeStr}.xlsx`;
-      const downloadsPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
+      const filePath = `${appFolderPath}/${fileName}`;
       
-      await RNFS.writeFile(downloadsPath, excelBuffer, 'base64');
+      await RNFS.writeFile(filePath, excelBuffer, 'base64');
+      console.log('💾 Arquivo salvo em:', filePath);
       
       // Compartilhar arquivo - uma única tentativa
       try {
         const shareOptions = {
           title: 'Exportar Dados da Loja',
           message: 'Dados exportados da Loja de Roupas',
-          url: `file://${downloadsPath}`,
+          url: `file://${filePath}`,
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         };
         await Share.open(shareOptions);

@@ -79,20 +79,24 @@ const Dropdown = ({
               autoFocus
             />
             
-            <FlatList
-              data={filteredData}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
+            <ScrollView
+              style={styles.optionsList}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              bounces={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredData.map((item) => (
                 <TouchableOpacity
+                  key={item.id.toString()}
                   style={styles.optionItem}
                   onPress={() => handleSelect(item)}
                 >
                   <Text style={styles.optionText}>{item[displayKey]}</Text>
                 </TouchableOpacity>
-              )}
-              style={styles.optionsList}
-              showsVerticalScrollIndicator={false}
-            />
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>

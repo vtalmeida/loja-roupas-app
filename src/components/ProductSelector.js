@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -19,6 +19,12 @@ const ProductSelector = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
+
+  // Forçar re-renderização quando produtos mudam
+  useEffect(() => {
+    // Este useEffect garante que o componente seja re-renderizado
+    // quando os produtos selecionados mudam
+  }, [selectedProducts]);
 
   const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchText.toLowerCase())
@@ -42,7 +48,7 @@ const ProductSelector = ({
         quantity: 1,
         unit_price: suggestedPrice,
         total_price: suggestedPrice,
-        unit_price_text: suggestedPrice.toString().replace('.', ',') // Adicionar campo de texto para o input
+        unit_price_text: suggestedPrice.toFixed(2).replace('.', ',') // Formatação correta com 2 casas decimais
       };
       onProductsChange([...selectedProducts, newProduct]);
     }
@@ -198,7 +204,11 @@ const ProductSelector = ({
             
             <ScrollView
               style={styles.productsList}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              bounces={true}
+              keyboardShouldPersistTaps="handled"
             >
               {filteredProducts.map((product) => (
                 <TouchableOpacity

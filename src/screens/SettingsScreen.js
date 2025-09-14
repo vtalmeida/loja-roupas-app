@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -6,7 +6,8 @@ import {
   ScrollView, 
   TouchableOpacity,
   Alert,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import RNFS from 'react-native-fs';
@@ -18,8 +19,102 @@ import ExcelServiceImproved from '../services/ExcelServiceImproved';
 import Database from '../database/database';
 import colors from '../theme/colors';
 
-const SettingsScreen = ({ navigation }) => {
+const SettingsScreen = ({ navigation, sharedFile, onFileProcessed }) => {
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (sharedFile) {
+      processSharedFile(sharedFile);
+    }
+  }, [sharedFile]);
+
+  const processSharedFile = async (fileUri) => {
+    try {
+      if (!fileUri || typeof fileUri !== 'string') {
+        throw new Error('Caminho do arquivo inválido ou não fornecido');
+      }
+      
+      const fileName = fileUri.split('/').pop() || 'arquivo_excel.xlsx';
+      const isAppExport = fileName.includes('BruModaIntima');
+      const confirmMessage = isAppExport 
+        ? `Importar dados do arquivo:\n\n📄 ${fileName}\n\n✅ Este arquivo foi exportado pelo app e tem total compatibilidade.`
+        : `Importar dados do arquivo:\n\n📄 ${fileName}\n\n⚠️ Este é um arquivo externo. Verifique se tem as abas: Produtos, Clientes, Pedidos.`;
+      
+      Alert.alert(
+        'Confirmar Importação',
+        confirmMessage,
+        [
+          { text: 'Cancelar', style: 'cancel', onPress: () => {
+            if (onFileProcessed) {
+              onFileProcessed();
+            }
+          }},
+          { 
+            text: 'Importar', 
+            onPress: () => performSharedFileImport(fileUri)
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Erro', `Erro ao processar arquivo: ${error.message}`, [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            if (onFileProcessed) {
+              onFileProcessed();
+            }
+          }
+        }
+      ]);
+    }
+  };
+
+  const performSharedFileImport = async (fileUri) => {
+    try {
+      setLoading(true);
+      
+      // Verificar se é um arquivo compartilhado (content://) ou arquivo local
+      let result;
+      if (fileUri.startsWith('content://')) {
+        // Arquivo compartilhado - usar método especial
+        result = await ExcelServiceImproved.importSharedFile(fileUri);
+      } else {
+        // Arquivo local - usar método normal
+        result = await ExcelServiceImproved.importAllData(fileUri);
+      }
+      
+      const alertTitle = result.success ? '✅ Importação Concluída' : '❌ Erro na Importação';
+      const alertMessage = result.success 
+        ? `Arquivo importado com sucesso!\n\n${result.message}`
+        : `Erro ao importar arquivo:\n\n${result.message}`;
+      
+      Alert.alert(alertTitle, alertMessage, [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            // Limpar o arquivo compartilhado
+            if (onFileProcessed) {
+              onFileProcessed();
+            }
+          }
+        }
+      ]);
+    } catch (error) {
+      console.error('Erro ao importar arquivo compartilhado:', error);
+      Alert.alert('Erro', `Erro ao importar arquivo: ${error.message}`, [
+        { 
+          text: 'OK', 
+          onPress: () => {
+            if (onFileProcessed) {
+              onFileProcessed();
+            }
+          }
+        }
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleExportToGoogleSheets = async () => {
     console.log('Iniciando exportação...');
@@ -45,172 +140,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
 
-  const handleImportAllData = async () => {
-    Alert.alert(
-      'Importar Dados de Planilha',
-      'Esta ação irá importar os dados da planilha selecionada e adicionar aos dados existentes. Deseja continuar?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Importar', 
-          style: 'default',
-          onPress: () => selectAndImportFile()
-        }
-      ]
-    );
-  };
 
-  const selectAndImportFile = async () => {
-    try {
-      setLoading(true);
-      
-      // Listar arquivos Excel na pasta Downloads
-      const downloadsPath = RNFS.DownloadDirectoryPath;
-      const files = await RNFS.readDir(downloadsPath);
-      
-      // Filtrar apenas arquivos Excel (.xlsx e .xls)
-      const excelFiles = files.filter(file => 
-        file.isFile() && 
-        (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls'))
-      );
-      
-      if (excelFiles.length === 0) {
-        Alert.alert(
-          'Nenhum arquivo Excel encontrado',
-          'Não foram encontrados arquivos Excel (.xlsx ou .xls) na pasta Downloads.\n\nPara importar dados:\n1. Coloque o arquivo Excel na pasta Downloads\n2. O arquivo deve ter as abas: Produtos, Clientes, Pedidos\n3. Tente novamente',
-          [
-            { text: 'OK' },
-            { 
-              text: 'Verificar Pasta', 
-              onPress: () => checkDownloadsFolder() 
-            }
-          ]
-        );
-        return;
-      }
-      
-      // Ordenar arquivos por data de modificação (mais recentes primeiro)
-      excelFiles.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
-      
-      // Criar lista de opções para o usuário escolher
-      const fileOptions = excelFiles.map((file, index) => {
-        const fileDate = new Date(file.mtime).toLocaleDateString('pt-BR');
-        const fileSize = (file.size / 1024).toFixed(1) + ' KB';
-        const isAppExport = file.name.includes('BruModaIntima');
-        
-        return {
-          text: `${file.name}\n📅 ${fileDate} | 📊 ${fileSize}${isAppExport ? ' | ✅ Exportado pelo app' : ' | ⚠️ Arquivo externo'}`,
-          onPress: () => importSelectedFile(file.path, file.name)
-        };
-      });
-      
-      // Adicionar opções extras
-      fileOptions.push(
-        {
-          text: '📁 Verificar Pasta Downloads',
-          onPress: () => checkDownloadsFolder()
-        },
-        {
-          text: '❌ Cancelar',
-          style: 'cancel'
-        }
-      );
-      
-      Alert.alert(
-        '📊 Selecionar Arquivo Excel para Importar',
-        `Encontrados ${excelFiles.length} arquivo(s) Excel na pasta Downloads:\n\n💡 Dica: Arquivos exportados pelo app têm maior compatibilidade.`,
-        fileOptions
-      );
-      
-    } catch (error) {
-      console.error('Erro ao listar arquivos:', error);
-      Alert.alert('Erro', 'Erro ao acessar pasta Downloads: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkDownloadsFolder = async () => {
-    try {
-      const downloadsPath = RNFS.DownloadDirectoryPath;
-      const files = await RNFS.readDir(downloadsPath);
-      
-      const allFiles = files.filter(file => file.isFile());
-      const excelFiles = allFiles.filter(file => 
-        file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')
-      );
-      
-      let message = `📁 Pasta Downloads:\n`;
-      message += `📊 Total de arquivos: ${allFiles.length}\n`;
-      message += `📈 Arquivos Excel: ${excelFiles.length}\n\n`;
-      
-      if (excelFiles.length > 0) {
-        message += `Arquivos Excel encontrados:\n`;
-        excelFiles.forEach(file => {
-          const fileDate = new Date(file.mtime).toLocaleDateString('pt-BR');
-          const fileSize = (file.size / 1024).toFixed(1) + ' KB';
-          const isAppExport = file.name.includes('BruModaIntima');
-          message += `• ${file.name} (${fileDate}, ${fileSize})${isAppExport ? ' ✅' : ' ⚠️'}\n`;
-        });
-      } else {
-        message += `Nenhum arquivo Excel encontrado.\n\nPara importar:\n1. Coloque um arquivo .xlsx na pasta Downloads\n2. O arquivo deve ter as abas: Produtos, Clientes, Pedidos`;
-      }
-      
-      Alert.alert('📁 Informações da Pasta Downloads', message, [{ text: 'OK' }]);
-    } catch (error) {
-      Alert.alert('Erro', 'Erro ao verificar pasta Downloads: ' + error.message);
-    }
-  };
-
-  const importSelectedFile = async (filePath, fileName = '') => {
-    try {
-      setLoading(true);
-      console.log('Importando arquivo:', filePath);
-      
-      // Mostrar confirmação antes de importar
-      const isAppExport = fileName.includes('BruModaIntima');
-      const confirmMessage = isAppExport 
-        ? `Importar dados do arquivo:\n\n📄 ${fileName}\n\n✅ Este arquivo foi exportado pelo app e tem total compatibilidade.`
-        : `Importar dados do arquivo:\n\n📄 ${fileName}\n\n⚠️ Este é um arquivo externo. Verifique se tem as abas: Produtos, Clientes, Pedidos.`;
-      
-      Alert.alert(
-        'Confirmar Importação',
-        confirmMessage,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { 
-            text: 'Importar', 
-            onPress: () => performImport(filePath, fileName)
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Erro ao importar arquivo:', error);
-      Alert.alert('Erro', 'Erro ao importar arquivo: ' + error.message);
-      setLoading(false);
-    }
-  };
-
-  const performImport = async (filePath, fileName) => {
-    try {
-      setLoading(true);
-      
-      // Importar dados usando o ExcelService melhorado
-      const result = await ExcelServiceImproved.importAllData(filePath);
-      
-      const alertTitle = result.success ? '✅ Importação Concluída' : '❌ Erro na Importação';
-      const alertMessage = result.success 
-        ? `Arquivo: ${fileName}\n\n${result.message}`
-        : `Arquivo: ${fileName}\n\n${result.message}`;
-      
-      Alert.alert(alertTitle, alertMessage, [{ text: 'OK' }]);
-    } catch (error) {
-      console.error('Erro ao importar arquivo:', error);
-      Alert.alert('Erro', `Erro ao importar arquivo ${fileName}: ` + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
 
   const handleClearDatabase = () => {
@@ -263,24 +193,6 @@ const SettingsScreen = ({ navigation }) => {
     </Card>
   );
 
-  const ImportCard = ({ title, description, onPress, icon, color = colors.success }) => (
-    <Card style={styles.importCard}>
-      <View style={styles.importHeader}>
-        <Text style={styles.importIcon}>{icon}</Text>
-        <View style={styles.importInfo}>
-          <Text style={styles.importTitle}>{title}</Text>
-          <Text style={styles.importDescription}>{description}</Text>
-        </View>
-      </View>
-      <Button
-        title="Importar"
-        onPress={onPress}
-        variant="success"
-        style={[styles.importButton, { backgroundColor: color }]}
-        disabled={loading}
-      />
-    </Card>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -307,16 +219,20 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📥 Importar Dados</Text>
           <Text style={styles.sectionDescription}>
-            Importe dados de planilhas Excel para o aplicativo. Use a planilha exportada pelo próprio app.
+            Para importar dados de planilhas Excel para o aplicativo:
           </Text>
           
-          <ImportCard
-            title="Importar Dados de Planilha"
-            description="Selecione arquivo Excel da pasta Downloads do dispositivo"
-            onPress={handleImportAllData}
-            icon="📊"
-            color={colors.success}
-          />
+          <View style={styles.importInstructions}>
+            <Text style={styles.instructionTitle}>📋 Como Importar:</Text>
+            <Text style={styles.instructionStep}>1. Abra o arquivo Excel em qualquer app</Text>
+            <Text style={styles.instructionStep}>2. Toque em "Compartilhar" ou "Abrir com"</Text>
+            <Text style={styles.instructionStep}>3. Selecione "Bru Moda Íntima"</Text>
+            <Text style={styles.instructionStep}>4. Confirme a importação</Text>
+            
+            <Text style={styles.instructionNote}>
+              💡 Dica: Use arquivos exportados pelo próprio app para melhor compatibilidade
+            </Text>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -345,25 +261,6 @@ const SettingsScreen = ({ navigation }) => {
           </Card>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>ℹ️ Informações</Text>
-          <Card style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Formato de Importação</Text>
-            <Text style={styles.infoText}>
-              Para importar produtos, use uma planilha Excel com as seguintes colunas:
-            </Text>
-            <Text style={styles.infoList}>
-              • Nome (obrigatório){'\n'}
-              • Preço de Custo (obrigatório){'\n'}
-              • Preço de Venda (obrigatório){'\n'}
-              • Quantidade{'\n'}
-              • Descrição{'\n'}
-              • Categoria{'\n'}
-              • Tamanho{'\n'}
-              • Cor
-            </Text>
-          </Card>
-        </View>
 
         {loading && (
           <View style={styles.loadingContainer}>
@@ -426,56 +323,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     paddingHorizontal: 20,
   },
-  importCard: {
-    marginBottom: 12,
-  },
-  importHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  importIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  importInfo: {
-    flex: 1,
-  },
-  importTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  importDescription: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  importButton: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 20,
-  },
-  infoCard: {
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  infoList: {
-    fontSize: 14,
-    color: colors.textPrimary,
-    lineHeight: 20,
-  },
   loadingContainer: {
     alignItems: 'center',
     padding: 20,
@@ -516,6 +363,35 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     paddingHorizontal: 20,
     backgroundColor: colors.error,
+  },
+  importInstructions: {
+    backgroundColor: colors.backgroundCard,
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  instructionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  instructionStep: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  instructionNote: {
+    fontSize: 12,
+    color: colors.info,
+    fontStyle: 'italic',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
 });
 

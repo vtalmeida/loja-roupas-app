@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -66,20 +66,21 @@ function ReportsStack() {
   );
 }
 
-function SettingsStack() {
+function SettingsStack({ sharedFile, onFileProcessed }) {
   return (
     <Stack.Navigator>
       <Stack.Screen 
         name="SettingsList" 
-        component={SettingsScreen}
         options={{ headerShown: false }}
-      />
+      >
+        {(props) => <SettingsScreen {...props} sharedFile={sharedFile} onFileProcessed={onFileProcessed} />}
+      </Stack.Screen>
     </Stack.Navigator>
   );
 }
 
 // Tab Navigator principal
-function MainTabNavigator() {
+function MainTabNavigator({ sharedFile, onFileProcessed }) {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -165,21 +166,24 @@ function MainTabNavigator() {
       />
       <Tab.Screen 
         name="Settings" 
-        component={SettingsStack}
         options={{ 
           title: 'Configurações',
           tabBarLabel: 'Configurações'
         }}
-      />
+      >
+        {(props) => <SettingsStack {...props} sharedFile={sharedFile} onFileProcessed={onFileProcessed} />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }
 
 // Navigator principal
-export default function AppNavigator() {
+const AppNavigator = forwardRef(({ sharedFile, onFileProcessed }, ref) => {
   return (
-    <NavigationContainer>
-      <MainTabNavigator />
+    <NavigationContainer ref={ref}>
+      <MainTabNavigator sharedFile={sharedFile} onFileProcessed={onFileProcessed} />
     </NavigationContainer>
   );
-}
+});
+
+export default AppNavigator;

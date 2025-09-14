@@ -27,6 +27,8 @@ import ErrorModal from '../components/ErrorModal';
 
 const ProductsScreen = ({ navigation, route }) => {
   const [products, setProducts] = useState([]);
+  const [filteredProducts, setFilteredProducts] = useState([]);
+  const [searchText, setSearchText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -37,7 +39,6 @@ const ProductsScreen = ({ navigation, route }) => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    quantity: '',
     cost_price: '',
   });
 
@@ -45,6 +46,18 @@ const ProductsScreen = ({ navigation, route }) => {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  // Filtrar produtos quando searchText mudar
+  useEffect(() => {
+    if (searchText.trim() === '') {
+      setFilteredProducts(products);
+    } else {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchText.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    }
+  }, [searchText, products]);
 
   // Recarregar dados sempre que a tela receber foco
   useFocusEffect(
@@ -80,6 +93,7 @@ const ProductsScreen = ({ navigation, route }) => {
       await Database.init();
       const productsData = await Database.getProducts();
       setProducts(productsData);
+      setFilteredProducts(productsData);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
       Alert.alert('Erro', 'Não foi possível carregar os produtos');
@@ -94,7 +108,6 @@ const ProductsScreen = ({ navigation, route }) => {
     setEditingProduct(null);
     setFormData({
       name: '',
-      quantity: '',
       cost_price: '',
     });
     setModalVisible(true);
@@ -104,7 +117,6 @@ const ProductsScreen = ({ navigation, route }) => {
     setEditingProduct(product);
     setFormData({
       name: product.name,
-      quantity: product.quantity.toString(),
       cost_price: product.cost_price.toFixed(2).replace('.', ','),
     });
     setModalVisible(true);
@@ -124,7 +136,7 @@ const ProductsScreen = ({ navigation, route }) => {
     try {
       const productData = {
         name: formData.name,
-        quantity: parseInt(formData.quantity) || 0,
+        quantity: 0, // Sempre 0, pois não estamos mais gerenciando estoque
         cost_price: parseFloat(cleanCurrencyValue(formData.cost_price)),
       };
 
@@ -199,9 +211,6 @@ const ProductsScreen = ({ navigation, route }) => {
       
       <View style={styles.productDetails}>
         <Text style={styles.productDetail}>
-          <Text style={styles.detailLabel}>Quantidade:</Text> {item.quantity}
-        </Text>
-        <Text style={styles.productDetail}>
           <Text style={styles.detailLabel}>Preço de Custo:</Text> R$ {formatCurrency(item.cost_price || 0)}
         </Text>
         <Text style={styles.productDetail}>
@@ -223,14 +232,24 @@ const ProductsScreen = ({ navigation, route }) => {
       />
       
       <View style={styles.content}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar produtos por nome..."
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
         <View style={styles.summary}>
           <Text style={styles.summaryText}>
-            Total de produtos: {products.length}
+            Total de produtos: {filteredProducts.length}
           </Text>
         </View>
         
         <FlatList
-          data={products}
+          data={filteredProducts}
           renderItem={renderProduct}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
@@ -249,17 +268,6 @@ const ProductsScreen = ({ navigation, route }) => {
             value={formData.name}
             onChangeText={(text) => setFormData({ ...formData, name: text })}
             placeholder="Ex: Camiseta Polo"
-          />
-          
-          <Input
-            label="Quantidade em Estoque"
-            value={formData.quantity}
-            onChangeText={(text) => {
-              // Aceita apenas números
-              const cleanText = text.replace(/[^\d]/g, '');
-              setFormData({ ...formData, quantity: cleanText });
-            }}
-            placeholder="0"
           />
           
           <CurrencyInput
@@ -319,6 +327,20 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  searchContainer: {
+    padding: 16,
+    paddingBottom: 8,
+  },
+  searchInput: {
+    backgroundColor: colors.backgroundCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.textPrimary,
   },
   addButton: {
     fontSize: 28,

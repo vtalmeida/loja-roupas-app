@@ -1,0 +1,5 @@
+[33mf9918a8[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Atualização de ícones do app e melhorias nas telas de clientes, pedidos e produtos
+[33mc83d4ba[m[33m ([m[1;31morigin/main[m[33m)[m feat: Atualizar status bar para rose gold principal - Mudança da cor da status bar para #E8B4B8 (primary) para usar a cor principal do tema
+[33m6dd58ae[m feat: Atualizar status bar para rose gold claro - Mudança da cor da status bar para #F2D1D3 (primaryLight) para melhor harmonia com o tema
+[33mfdb598a[m feat: Configurar status bar rosa no Android - Status bar agora usa a cor rosa padrão (#D61A75) em vez do azul
+[33m406e397[m feat: Melhorias visuais e de UX - Aplicação de tema consistente, modais customizados, headers padronizados e botões flutuantes

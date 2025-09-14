@@ -63,7 +63,14 @@ const FilterModal = ({
             </TouchableOpacity>
           </View>
           
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.modalBody} 
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            bounces={true}
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Filtro por Status */}
             <View style={styles.filterSection}>
               <Text style={styles.sectionTitle}>Status</Text>

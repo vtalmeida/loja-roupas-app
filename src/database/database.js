@@ -432,6 +432,11 @@ class Database {
     await this.db.executeSql(query, [paidAmount, id]);
   }
 
+  async deleteOrderItems(orderId) {
+    const query = 'DELETE FROM order_items WHERE order_id = ?';
+    await this.db.executeSql(query, [orderId]);
+  }
+
   async deleteOrder(id) {
     // Primeiro excluir os itens do pedido
     const deleteItemsQuery = 'DELETE FROM order_items WHERE order_id = ?';

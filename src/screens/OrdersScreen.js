@@ -130,16 +130,9 @@ const OrdersScreen = ({ navigation, route }) => {
       filtered = filtered.filter(order => order.customer_id.toString() === customerFilter);
     }
 
-    // Aplicar ordenação
+    // Aplicar ordenação por ID do pedido (ordem decrescente)
     filtered.sort((a, b) => {
-      const dateA = new Date(a.created_at);
-      const dateB = new Date(b.created_at);
-      
-      if (sortOrder === 'newest') {
-        return dateB - dateA;
-      } else {
-        return dateA - dateB;
-      }
+      return b.id - a.id; // Ordem decrescente por ID
     });
 
     setFilteredOrders(filtered);
@@ -204,6 +197,22 @@ const OrdersScreen = ({ navigation, route }) => {
         // Atualizar pedido existente
         await Database.updateOrderStatus(editingOrder.id, formData.status);
         await Database.updateOrderPaidAmount(editingOrder.id, parseFloat(cleanCurrencyValue(formData.paid_amount)) || 0);
+        await Database.updateOrderTotal(editingOrder.id, totalAmount);
+        
+        // Remover todos os itens existentes do pedido
+        await Database.deleteOrderItems(editingOrder.id);
+        
+        // Adicionar os novos itens do pedido
+        for (const product of selectedProducts) {
+          await Database.addOrderItem({
+            order_id: editingOrder.id,
+            product_id: product.id,
+            quantity: product.quantity,
+            unit_price: product.unit_price,
+            total_price: product.total_price,
+          });
+        }
+        
         showSuccessModal('Pedido atualizado com sucesso');
       } else {
         // Criar novo pedido

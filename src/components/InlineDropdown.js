@@ -101,7 +101,11 @@ const InlineDropdown = ({
             
             <ScrollView
               style={styles.optionsList}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              scrollEnabled={true}
+              bounces={true}
+              keyboardShouldPersistTaps="handled"
             >
               {filteredData.map((item) => (
                 <TouchableOpacity
