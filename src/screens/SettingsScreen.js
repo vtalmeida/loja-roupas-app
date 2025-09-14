@@ -14,6 +14,7 @@ import Header from '../components/Header';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import ExcelService from '../services/ExcelService';
+import ExcelServiceImproved from '../services/ExcelServiceImproved';
 import Database from '../database/database';
 import colors from '../theme/colors';
 
@@ -67,7 +68,7 @@ const SettingsScreen = ({ navigation }) => {
       const downloadsPath = RNFS.DownloadDirectoryPath;
       const files = await RNFS.readDir(downloadsPath);
       
-      // Filtrar apenas arquivos Excel
+      // Filtrar apenas arquivos Excel (.xlsx e .xls)
       const excelFiles = files.filter(file => 
         file.isFile() && 
         (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls'))
@@ -75,28 +76,49 @@ const SettingsScreen = ({ navigation }) => {
       
       if (excelFiles.length === 0) {
         Alert.alert(
-          'Nenhum arquivo encontrado',
-          'Não foram encontrados arquivos Excel na pasta Downloads.\n\nPara importar dados:\n1. Exporte seus dados primeiro\n2. Salve o arquivo na pasta Downloads\n3. Tente novamente',
-          [{ text: 'OK' }]
+          'Nenhum arquivo Excel encontrado',
+          'Não foram encontrados arquivos Excel (.xlsx ou .xls) na pasta Downloads.\n\nPara importar dados:\n1. Coloque o arquivo Excel na pasta Downloads\n2. O arquivo deve ter as abas: Produtos, Clientes, Pedidos\n3. Tente novamente',
+          [
+            { text: 'OK' },
+            { 
+              text: 'Verificar Pasta', 
+              onPress: () => checkDownloadsFolder() 
+            }
+          ]
         );
         return;
       }
       
-      // Criar lista de opções para o usuário escolher
-      const fileOptions = excelFiles.map((file, index) => ({
-        text: file.name,
-        onPress: () => importSelectedFile(file.path)
-      }));
+      // Ordenar arquivos por data de modificação (mais recentes primeiro)
+      excelFiles.sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
       
-      // Adicionar opção de cancelar
-      fileOptions.push({
-        text: 'Cancelar',
-        style: 'cancel'
+      // Criar lista de opções para o usuário escolher
+      const fileOptions = excelFiles.map((file, index) => {
+        const fileDate = new Date(file.mtime).toLocaleDateString('pt-BR');
+        const fileSize = (file.size / 1024).toFixed(1) + ' KB';
+        const isAppExport = file.name.includes('BruModaIntima');
+        
+        return {
+          text: `${file.name}\n📅 ${fileDate} | 📊 ${fileSize}${isAppExport ? ' | ✅ Exportado pelo app' : ' | ⚠️ Arquivo externo'}`,
+          onPress: () => importSelectedFile(file.path, file.name)
+        };
       });
       
+      // Adicionar opções extras
+      fileOptions.push(
+        {
+          text: '📁 Verificar Pasta Downloads',
+          onPress: () => checkDownloadsFolder()
+        },
+        {
+          text: '❌ Cancelar',
+          style: 'cancel'
+        }
+      );
+      
       Alert.alert(
-        'Selecionar Arquivo para Importar',
-        'Escolha um arquivo Excel da pasta Downloads:',
+        '📊 Selecionar Arquivo Excel para Importar',
+        `Encontrados ${excelFiles.length} arquivo(s) Excel na pasta Downloads:\n\n💡 Dica: Arquivos exportados pelo app têm maior compatibilidade.`,
         fileOptions
       );
       
@@ -108,22 +130,83 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
-  const importSelectedFile = async (filePath) => {
+  const checkDownloadsFolder = async () => {
+    try {
+      const downloadsPath = RNFS.DownloadDirectoryPath;
+      const files = await RNFS.readDir(downloadsPath);
+      
+      const allFiles = files.filter(file => file.isFile());
+      const excelFiles = allFiles.filter(file => 
+        file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')
+      );
+      
+      let message = `📁 Pasta Downloads:\n`;
+      message += `📊 Total de arquivos: ${allFiles.length}\n`;
+      message += `📈 Arquivos Excel: ${excelFiles.length}\n\n`;
+      
+      if (excelFiles.length > 0) {
+        message += `Arquivos Excel encontrados:\n`;
+        excelFiles.forEach(file => {
+          const fileDate = new Date(file.mtime).toLocaleDateString('pt-BR');
+          const fileSize = (file.size / 1024).toFixed(1) + ' KB';
+          const isAppExport = file.name.includes('BruModaIntima');
+          message += `• ${file.name} (${fileDate}, ${fileSize})${isAppExport ? ' ✅' : ' ⚠️'}\n`;
+        });
+      } else {
+        message += `Nenhum arquivo Excel encontrado.\n\nPara importar:\n1. Coloque um arquivo .xlsx na pasta Downloads\n2. O arquivo deve ter as abas: Produtos, Clientes, Pedidos`;
+      }
+      
+      Alert.alert('📁 Informações da Pasta Downloads', message, [{ text: 'OK' }]);
+    } catch (error) {
+      Alert.alert('Erro', 'Erro ao verificar pasta Downloads: ' + error.message);
+    }
+  };
+
+  const importSelectedFile = async (filePath, fileName = '') => {
     try {
       setLoading(true);
       console.log('Importando arquivo:', filePath);
       
-      // Importar dados usando o ExcelService
-      const result = await ExcelService.importAllData(filePath);
+      // Mostrar confirmação antes de importar
+      const isAppExport = fileName.includes('BruModaIntima');
+      const confirmMessage = isAppExport 
+        ? `Importar dados do arquivo:\n\n📄 ${fileName}\n\n✅ Este arquivo foi exportado pelo app e tem total compatibilidade.`
+        : `Importar dados do arquivo:\n\n📄 ${fileName}\n\n⚠️ Este é um arquivo externo. Verifique se tem as abas: Produtos, Clientes, Pedidos.`;
       
       Alert.alert(
-        result.success ? 'Importação Concluída' : 'Erro na Importação',
-        result.message,
-        [{ text: 'OK' }]
+        'Confirmar Importação',
+        confirmMessage,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Importar', 
+            onPress: () => performImport(filePath, fileName)
+          }
+        ]
       );
     } catch (error) {
       console.error('Erro ao importar arquivo:', error);
       Alert.alert('Erro', 'Erro ao importar arquivo: ' + error.message);
+      setLoading(false);
+    }
+  };
+
+  const performImport = async (filePath, fileName) => {
+    try {
+      setLoading(true);
+      
+      // Importar dados usando o ExcelService melhorado
+      const result = await ExcelServiceImproved.importAllData(filePath);
+      
+      const alertTitle = result.success ? '✅ Importação Concluída' : '❌ Erro na Importação';
+      const alertMessage = result.success 
+        ? `Arquivo: ${fileName}\n\n${result.message}`
+        : `Arquivo: ${fileName}\n\n${result.message}`;
+      
+      Alert.alert(alertTitle, alertMessage, [{ text: 'OK' }]);
+    } catch (error) {
+      console.error('Erro ao importar arquivo:', error);
+      Alert.alert('Erro', `Erro ao importar arquivo ${fileName}: ` + error.message);
     } finally {
       setLoading(false);
     }

@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   addButton: {
-    fontSize: 24,
+    fontSize: 28,
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
