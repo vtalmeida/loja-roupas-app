@@ -204,12 +204,12 @@ const SettingsScreen = ({ navigation, sharedFile, onFileProcessed }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📊 Exportar Dados</Text>
           <Text style={styles.sectionDescription}>
-            Exporte seus dados salvando no Google Drive ou editando no Google Sheets.
+            Exporte seus dados salvando automaticamente na pasta Downloads e compartilhando onde desejar.
           </Text>
           
           <ExportCard
             title="Exportar dados"
-            description="Abre menu para salvar arquivo no Google Drive ou editar no Google Sheets"
+            description="Salva automaticamente em Downloads > Bru Moda Íntima e abre opção de compartilhamento"
             onPress={handleExportToGoogleSheets}
             icon="☁️"
             color={colors.info}
